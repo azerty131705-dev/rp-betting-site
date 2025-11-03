@@ -13,185 +13,232 @@ const PORT = process.env.PORT || 3001;
 
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
 const ODDS_API_KEY = process.env.THEODDS_API_KEY || "";
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 
-// CORS (autorise localhost + domaine Vercel)
-app.use(cors({
-  origin: (origin, cb) => {
-    const allowed = [ "http://localhost:5173", CORS_ORIGIN ];
-    if (!origin || allowed.includes(origin)) return cb(null, true);
-    return cb(null, true); // en prod stricte: cb(new Error("Not allowed by CORS"));
-  }
-}));
+/* ------------------------- CORS (prod-friendly) ------------------------- */
+/*  - CORS_ORIGIN peut contenir plusieurs origines séparées par des virgules
+    - support du wildcard "https://*.vercel.app"
+    - pour tester rapidement, tu peux mettre CORS_ORIGIN="*"
+*/
+const rawOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+    if (!origin) return true; // autorise requêtes server-side & outils
+    if (rawOrigins.includes("*")) return true;
+    if (rawOrigins.includes(origin)) return true;
+    // wildcard vercel
+    if (origin.endsWith(".vercel.app") && rawOrigins.includes("https://*.vercel.app")) return true;
+    return false;
+}
+
+app.use(
+    cors({
+        origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+    })
+);
+
 app.use(express.json());
 
-// paths / cache (support Render Disks via CACHE_DIR)
-import { fileURLToPath as furl } from "url";
+/* ---------------------------- Cache directory --------------------------- */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CACHE_DIR = process.env.CACHE_DIR || path.join(__dirname, "cache");
-await fs.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
 
-// -------- health
+// Sur Render, monte un Disk sur /data et mets CACHE_DIR=/data/cache
+const CACHE_DIR = process.env.CACHE_DIR || path.join(__dirname, "cache");
+await fs.mkdir(CACHE_DIR, { recursive: true }).catch(() => { });
+
+/* -------------------------------- Health -------------------------------- */
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// -------- submit bet -> Discord
+/* -------------------------- Submit bet -> Discord ------------------------ */
 app.post("/api/submit-bet", async (req, res) => {
-  try {
-    const { bettorName, stake, selections } = req.body || {};
-    if (!bettorName || !stake || !Array.isArray(selections) || selections.length === 0) {
-      return res.status(400).json({ error: "Requête invalide: nom, mise et sélections requis." });
+    try {
+        const { bettorName, stake, selections } = req.body || {};
+        if (!bettorName || !stake || !Array.isArray(selections) || selections.length === 0) {
+            return res
+                .status(400)
+                .json({ error: "Requête invalide: nom, mise et sélections requis." });
+        }
+
+        const totalOdd = selections.reduce((acc, s) => acc * Number(s.odd || 1), 1);
+        const potentialWin = (Number(stake) * totalOdd).toFixed(2);
+
+        const content = [
+            `**Nouveau pari** 💸`,
+            `👤 Parieur: **${bettorName}**`,
+            `💶 Mise: **${stake}**`,
+            `🧮 Cote totale: **${totalOdd.toFixed(2)}**`,
+            `🏆 Gain potentiel: **${potentialWin}**`,
+            "",
+            selections
+                .map(
+                    (s, idx) =>
+                        `• ${idx + 1}. ${s.home} vs ${s.away} — *${s.competition}* (${s.kickOff})\n   ➜ **Choix:** ${s.pick} @ ${s.odd}`
+                )
+                .join("\n"),
+        ].join("\n");
+
+        if (!WEBHOOK_URL) {
+            console.warn(
+                "[WARN] DISCORD_WEBHOOK_URL is not set. Bets will not be sent to Discord."
+            );
+        } else {
+            await axios.post(WEBHOOK_URL, { content });
+        }
+
+        res.json({ ok: true, totalOdd: totalOdd.toFixed(2), potentialWin });
+    } catch (err) {
+        console.error(err?.response?.data || err.message);
+        res.status(500).json({ error: "Erreur serveur" });
     }
-    const totalOdd = selections.reduce((acc, s) => acc * Number(s.odd || 1), 1);
-    const potentialWin = (Number(stake) * totalOdd).toFixed(2);
-
-    const content = [
-      `**Nouveau pari** 💸`,
-      `👤 Parieur: **${bettorName}**`,
-      `💶 Mise: **${stake}**`,
-      `🧮 Cote totale: **${totalOdd.toFixed(2)}**`,
-      `🏆 Gain potentiel: **${potentialWin}**`,
-      "",
-      selections.map((s, idx) =>
-        `• ${idx+1}. ${s.home} vs ${s.away} — *${s.competition}* (${s.kickOff})\n   ➜ **Choix:** ${s.pick} @ ${s.odd}`
-      ).join("\n")
-    ].join("\n");
-
-    if (!WEBHOOK_URL) {
-      console.warn("[WARN] DISCORD_WEBHOOK_URL is not set. Bets will not be sent to Discord.");
-    } else {
-      await axios.post(WEBHOOK_URL, { content });
-    }
-
-    res.json({ ok: true, totalOdd: totalOdd.toFixed(2), potentialWin });
-  } catch (err) {
-    console.error(err?.response?.data || err.message);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
 });
 
-// ====== helpers ======
+/* -------------------------------- Helpers -------------------------------- */
 function toYMDParis(d = new Date()) {
-  // YYYY-MM-DD en Europe/Paris
-  return new Date(d).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
-}
-async function readCache(date) {
-  try {
-    const buf = await fs.readFile(path.join(CACHE_DIR, `${date}.json`), "utf-8");
-    return JSON.parse(buf);
-  } catch { return null; }
-}
-async function writeCache(date, payload) {
-  await fs.writeFile(path.join(CACHE_DIR, `${date}.json`), JSON.stringify(payload, null, 2), "utf-8");
+    // YYYY-MM-DD en Europe/Paris
+    return new Date(d).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
 }
 
-// The Odds API
+async function readCache(date) {
+    try {
+        const buf = await fs.readFile(path.join(CACHE_DIR, `${date}.json`), "utf-8");
+        return JSON.parse(buf);
+    } catch {
+        return null;
+    }
+}
+
+async function writeCache(date, payload) {
+    await fs.writeFile(
+        path.join(CACHE_DIR, `${date}.json`),
+        JSON.stringify(payload, null, 2),
+        "utf-8"
+    );
+}
+
+/* ---------------------------- The Odds API ------------------------------- */
 const SPORTS = {
-  EPL: "soccer_epl",
-  LALIGA: "soccer_spain_la_liga",
-  L1: "soccer_france_ligue_one",
-  BL1: "soccer_germany_bundesliga",
-  UCL: "soccer_uefa_champs_league"
+    EPL: "soccer_epl",
+    LALIGA: "soccer_spain_la_liga",
+    L1: "soccer_france_ligue_one",
+    BL1: "soccer_germany_bundesliga",
+    UCL: "soccer_uefa_champs_league",
 };
+
 const SPORT_LABEL = {
-  [SPORTS.EPL]: "Premier League",
-  [SPORTS.LALIGA]: "LaLiga",
-  [SPORTS.L1]: "Ligue 1",
-  [SPORTS.BL1]: "Bundesliga",
-  [SPORTS.UCL]: "Ligue des Champions"
+    [SPORTS.EPL]: "Premier League",
+    [SPORTS.LALIGA]: "LaLiga",
+    [SPORTS.L1]: "Ligue 1",
+    [SPORTS.BL1]: "Bundesliga",
+    [SPORTS.UCL]: "Ligue des Champions",
 };
 
 async function getLeagueOdds(sportKey, dateISO) {
-  if (!ODDS_API_KEY) throw new Error("THEODDS_API_KEY manquant dans .env");
-  const url = new URL(`https://api.the-odds-api.com/v4/sports/${sportKey}/odds`);
-  url.searchParams.set("regions", "eu");
-  url.searchParams.set("markets", "h2h");
-  url.searchParams.set("oddsFormat", "decimal");
-  url.searchParams.set("dateFormat", "iso");
-  url.searchParams.set("apiKey", ODDS_API_KEY);
+    if (!ODDS_API_KEY) throw new Error("THEODDS_API_KEY manquant dans .env");
 
-  const { data } = await axios.get(url.toString());
+    const url = new URL(`https://api.the-odds-api.com/v4/sports/${sportKey}/odds`);
+    url.searchParams.set("regions", "eu"); // cotes Europe
+    url.searchParams.set("markets", "h2h"); // 1X2
+    url.searchParams.set("oddsFormat", "decimal");
+    url.searchParams.set("dateFormat", "iso");
+    url.searchParams.set("apiKey", ODDS_API_KEY);
 
-  const isSameParisDay = (iso) =>
-    new Date(iso).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }) === dateISO;
+    const { data } = await axios.get(url.toString());
 
-  const events = (data || []).filter(e => isSameParisDay(e.commence_time));
+    const isSameParisDay = (iso) =>
+        new Date(iso).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }) === dateISO;
 
-  return events.map(ev => {
-    const markets = (ev.bookmakers || []).flatMap(bm =>
-      (bm.markets || []).map(m => ({ bm: bm.title, market: m }))
-    );
-    const h2h = markets.find(x => x.market && x.market.key === "h2h");
+    const events = (data || []).filter((e) => isSameParisDay(e.commence_time));
 
-    let best = { home: null, draw: null, away: null, bookmaker: null };
-    if (h2h && Array.isArray(h2h.market.outcomes)) {
-      for (const o of h2h.market.outcomes) {
-        const label = (o.name || "").toLowerCase();
-        const price = Number(o.price);
-        if (!isFinite(price)) continue;
-        if (label.includes("draw")) {
-          if (!best.draw || price > best.draw) best.draw = price, best.bookmaker = h2h.bm;
-        } else if (label === (ev.home_team || "").toLowerCase()) {
-          if (!best.home || price > best.home) best.home = price, best.bookmaker = h2h.bm;
-        } else if (label === (ev.away_team || "").toLowerCase()) {
-          if (!best.away || price > best.away) best.away = price, best.bookmaker = h2h.bm;
-        } else {
-          if ((ev.home_team||"").toLowerCase().includes(label)) {
-            if (!best.home || price > best.home) best.home = price, best.bookmaker = h2h.bm;
-          } else if ((ev.away_team||"").toLowerCase().includes(label)) {
-            if (!best.away || price > best.away) best.away = price, best.bookmaker = h2h.bm;
-          }
+    return events.map((ev) => {
+        // Trouver le marché H2H et la meilleure cote par issue
+        const markets = (ev.bookmakers || []).flatMap((bm) =>
+            (bm.markets || []).map((m) => ({ bm: bm.title, market: m }))
+        );
+        const h2h = markets.find((x) => x.market && x.market.key === "h2h");
+
+        let best = { home: null, draw: null, away: null, bookmaker: null };
+        if (h2h && Array.isArray(h2h.market.outcomes)) {
+            for (const o of h2h.market.outcomes) {
+                const label = (o.name || "").toLowerCase(); // "Draw" ou noms d'équipes
+                const price = Number(o.price);
+                if (!isFinite(price)) continue;
+
+                if (label.includes("draw")) {
+                    if (!best.draw || price > best.draw) (best.draw = price), (best.bookmaker = h2h.bm);
+                } else if (label === (ev.home_team || "").toLowerCase()) {
+                    if (!best.home || price > best.home) (best.home = price), (best.bookmaker = h2h.bm);
+                } else if (label === (ev.away_team || "").toLowerCase()) {
+                    if (!best.away || price > best.away) (best.away = price), (best.bookmaker = h2h.bm);
+                } else {
+                    // fallback si les noms ne matchent pas exactement
+                    if ((ev.home_team || "").toLowerCase().includes(label)) {
+                        if (!best.home || price > best.home) (best.home = price), (best.bookmaker = h2h.bm);
+                    } else if ((ev.away_team || "").toLowerCase().includes(label)) {
+                        if (!best.away || price > best.away) (best.away = price), (best.bookmaker = h2h.bm);
+                    }
+                }
+            }
         }
-      }
-    }
 
-    const kick = new Date(ev.commence_time).toLocaleTimeString("fr-FR", {
-      hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris"
+        const kick = new Date(ev.commence_time).toLocaleTimeString("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Europe/Paris",
+        });
+
+        return {
+            id: String(ev.id),
+            competition: SPORT_LABEL[sportKey] || "Compétition",
+            kickOff: kick,
+            home: ev.home_team,
+            away: ev.away_team,
+            odds: {
+                home: best.home ?? 2.2,
+                draw: best.draw ?? 3.3,
+                away: best.away ?? 3.2,
+            },
+            source: best.bookmaker || "The Odds API",
+        };
     });
-
-    return {
-      id: String(ev.id),
-      competition: SPORT_LABEL[sportKey] || "Compétition",
-      kickOff: kick,
-      home: ev.home_team,
-      away: ev.away_team,
-      odds: {
-        home: best.home ?? 2.2,
-        draw: best.draw ?? 3.3,
-        away: best.away ?? 3.2
-      },
-      source: best.bookmaker || "The Odds API"
-    };
-  });
 }
 
 async function buildDailyStock(dateISO) {
-  const sports = [SPORTS.EPL, SPORTS.LALIGA, SPORTS.L1, SPORTS.BL1, SPORTS.UCL];
-  const chunks = await Promise.all(sports.map(s => getLeagueOdds(s, dateISO)));
-  const all = chunks.flat();
+    const sports = [SPORTS.EPL, SPORTS.LALIGA, SPORTS.L1, SPORTS.BL1, SPORTS.UCL];
+    const chunks = await Promise.all(sports.map((s) => getLeagueOdds(s, dateISO)));
+    const all = chunks.flat();
 
-  all.sort((a, b) => (a.kickOff || "").localeCompare(b.kickOff || ""));
+    // tri simple HH:MM
+    all.sort((a, b) => (a.kickOff || "").localeCompare(b.kickOff || ""));
 
-  return { date: dateISO, generatedAt: new Date().toISOString(), matches: all };
+    return { date: dateISO, generatedAt: new Date().toISOString(), matches: all };
 }
 
+/* --------------------------- Route principale ---------------------------- */
 app.get("/api/matches-odds", async (req, res) => {
-  try {
-    const date = req.query.date || toYMDParis();
-    const cached = await readCache(date);
-    if (cached) return res.json(cached);
+    try {
+        const date = req.query.date || toYMDParis();
 
-    const built = await buildDailyStock(date);
-    await writeCache(date, built);
-    res.json(built);
-  } catch (e) {
-    console.error("matches-odds error", e?.response?.data || e.message);
-    res.status(500).json({ error: "Impossible de récupérer matchs/cotes." });
-  }
+        const cached = await readCache(date);
+        if (cached) return res.json(cached);
+
+        const built = await buildDailyStock(date);
+        await writeCache(date, built);
+        res.json(built);
+    } catch (e) {
+        console.error("matches-odds error", e?.response?.data || e.message);
+        res.status(500).json({ error: "Impossible de récupérer matchs/cotes." });
+    }
 });
 
+/* --------------------------------- Start -------------------------------- */
 app.listen(PORT, () => {
-  console.log(`[server] Listening on http://localhost:${PORT}`);
-  if (!WEBHOOK_URL) console.warn("[WARN] DISCORD_WEBHOOK_URL is not set. Bets will not be sent to Discord.");
-  if (!ODDS_API_KEY) console.warn("[WARN] THEODDS_API_KEY is not set.");
+    console.log(`[server] Listening on http://localhost:${PORT}`);
+    if (!WEBHOOK_URL)
+        console.warn(
+            "[WARN] DISCORD_WEBHOOK_URL is not set. Bets will not be sent to Discord."
+        );
+    if (!ODDS_API_KEY) console.warn("[WARN] THEODDS_API_KEY is not set.");
 });
