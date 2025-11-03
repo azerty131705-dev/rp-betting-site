@@ -24,6 +24,10 @@ export default function App() {
         [stake, totalOdd]
     );
 
+    useEffect(() => {
+        console.log('DEBUG totalOdd (somme) =', totalOdd, selections.map(s => s.odd));
+    }, [totalOdd, selections]);
+
 
   const togglePick = (match, pickKey) => {
     const existingIndex = selections.findIndex(s => s.matchId === match.id);
