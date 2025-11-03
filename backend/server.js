@@ -62,8 +62,10 @@ app.post("/api/submit-bet", async (req, res) => {
                 .json({ error: "Requête invalide: nom, mise et sélections requis." });
         }
 
-        const totalOdd = selections.reduce((acc, s) => acc * Number(s.odd || 1), 1);
+        // APRES — Somme des cotes
+        const totalOdd = selections.reduce((acc, s) => acc + Number(s.odd || 0), 0);
         const potentialWin = (Number(stake) * totalOdd).toFixed(2);
+
 
         const content = [
             `**Nouveau pari** 💸`,

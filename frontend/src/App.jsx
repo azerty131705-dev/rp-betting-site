@@ -14,8 +14,16 @@ export default function App() {
     fetchMatches().then(setMatches).catch((e)=>{ console.error(e); setMatches([]); });
   }, []);
 
-  const totalOdd = useMemo(() => selections.reduce((acc, s) => acc * Number(s.odd || 1), 1), [selections]);
-  const potentialWin = useMemo(() => (Number(stake || 0) * totalOdd).toFixed(2), [stake, totalOdd]);
+    // APRES — Somme des cotes
+    const totalOdd = useMemo(
+        () => selections.reduce((acc, s) => acc + Number(s.odd || 0), 0),
+        [selections]
+    );
+    const potentialWin = useMemo(
+        () => (Number(stake || 0) * totalOdd).toFixed(2),
+        [stake, totalOdd]
+    );
+
 
   const togglePick = (match, pickKey) => {
     const existingIndex = selections.findIndex(s => s.matchId === match.id);
