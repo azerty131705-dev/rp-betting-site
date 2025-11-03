@@ -60,7 +60,7 @@ export default function App() {
     setSending(true);
     try {
       const res = await submitBet({ bettorName, stake: Number(stake), selections });
-      alert(`Pari envoyé ! Cote totale ${res.totalOdd} • Gain potentiel ${res.potentialWin}`);
+      alert(`Pari envoyé ! Cote totale ${totalOdd.toFixed(2)} • Gain potentiel ${potentialWin}`);
       setSelections([]); setStake(""); setBettorName("");
     } catch (e) {
       console.error(e);
