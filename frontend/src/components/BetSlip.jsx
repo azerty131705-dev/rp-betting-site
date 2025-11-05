@@ -1,13 +1,13 @@
 import React from "react";
 
-export default function BetSlip({ selections, onRemove }) {
-    const fmtOdd = (v) => {
-        const n = Number(v);
-        if (!isFinite(n)) return "-";
-        const s = n.toFixed(2);
-        return s.replace(/(\.\d)0$/, "$1");
-    };
+const fmtOdd = (v) => {
+    const n = Number(v);
+    if (!isFinite(n)) return "-";
+    const s = n.toFixed(2);
+    return s.replace(/(\.\d)0$/, "$1");
+};
 
+export default function BetSlip({ selections, onRemove }) {
     if (selections.length === 0) return null;
 
     return (
@@ -15,7 +15,9 @@ export default function BetSlip({ selections, onRemove }) {
             {selections.map((s) => (
                 <div className="row item" key={s.matchId} style={{ alignItems: "center" }}>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600 }}>{s.home} vs {s.away}</div>
+                        <div style={{ fontWeight: 600 }}>
+                            {s.home} vs {s.away}
+                        </div>
                         <div className="small">
                             {s.competition} — {s.kickOff}
                         </div>
