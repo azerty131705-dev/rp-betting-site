@@ -1,16 +1,48 @@
-:root { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; background: #202020; color: #f0f0f0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial; }
-.container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-h1 { font-size: 28px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-.grid { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
-.card { background: #2a2a2a; border: 1px solid #383838; border-radius: 12px; padding: 12px; margin-bottom: 12px;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset, 0 8px 30px rgba(0,0,0,0.2); }
-.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #383838; }
-.oddbtn { background: #1f1f1f; border: 1px solid #444; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
-.oddbtn.active { background: #0a7cff; border-color: #0a7cff; color: white; }
-.input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #3a3a3a; background: #1c1c1c; color: #f0f0f0; }
-.button { width: 100%; padding: 12px; border-radius: 12px; border: 0; background: #00c26e; color: #082a1b; font-weight: 700; cursor: pointer; }
-.small { font-size: 12px; opacity: 0.75; }
+/* === SELECTION LIST (ticket items) === */
+.row.item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-top: 1px solid #2b2f36;
+}
+
+    .row.item:first-child {
+        border-top: none;
+    }
+
+/* Bouton ENLEVER gris rectangulaire (à droite) */
+.remove-btn {
+    background: #444;
+    padding: 10px 14px;
+    border-radius: 10px; /* rectangulaire doux */
+    border: 1px solid #3b4048;
+    color: #e5e7eb;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+    .remove-btn:hover {
+        background: #5a6070;
+        border-color: #4b515c;
+    }
+
+/* === BOUTON VALIDER (grand vert) === */
+.button {
+    background: #00d46a;
+    padding: 12px;
+    border-radius: 8px;
+    width: 100%;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    color: #04110a;
+    margin-top: 12px;
+}
+
+    .button:disabled {
+        background: #4e4e4e;
+        color: #a9a9a9;
+        cursor: not-allowed;
+    }

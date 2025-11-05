@@ -11,9 +11,14 @@ const fmtOdd = (v) => {
 export default function MatchCard({ match, onPick, selected }) {
     const btn = (key, label) => {
         const odd = fmtOdd(match.odds[key]);
+
+        // selected est le "label" choisi (ex: "Nul", "Chelsea", etc.)
+        const isActive =
+            selected === label || (selected === "Nul" && key === "draw");
+
         return (
             <button
-                className={`chip ${selected === label ? "active" : ""}`}
+                className={`odd-btn ${isActive ? "selected" : ""}`}
                 onClick={() => onPick(match, key)}
                 title={`${label} @ ${odd}`}
             >
@@ -30,7 +35,7 @@ export default function MatchCard({ match, onPick, selected }) {
             <h3 style={{ marginTop: 6 }}>
                 {match.home} vs {match.away}
             </h3>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <div className="odds-row">
                 {btn("home", match.home)}
                 {btn("draw", "Nul")}
                 {btn("away", match.away)}
