@@ -1,9 +1,11 @@
 import React from "react";
 
+// même format que sur les cartes
 const fmtOdd = (v) => {
     const n = Number(String(v).replace(",", "."));
     if (!isFinite(n)) return "-";
-    return n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    const s = n.toFixed(2);
+    return s.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 };
 
 export default function BetSlip({ selections, onRemove }) {

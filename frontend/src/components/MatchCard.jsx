@@ -1,10 +1,11 @@
 ﻿import React from "react";
 
+// 8.420 -> "8.42", 8.50 -> "8.5", 2.00 -> "2"
 const fmtOdd = (v) => {
     const n = Number(String(v).replace(",", "."));
     if (!isFinite(n)) return "-";
-    // affichage fr : 2,0 / 8,5 / 1,05
-    return n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    const s = n.toFixed(2);
+    return s.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 };
 
 export default function MatchCard({ match, onPick, selected }) {
