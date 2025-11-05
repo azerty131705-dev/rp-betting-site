@@ -1,10 +1,9 @@
 import React from "react";
 
 const fmtOdd = (v) => {
-    const n = Number(v);
+    const n = Number(String(v).replace(",", "."));
     if (!isFinite(n)) return "-";
-    const s = n.toFixed(2);
-    return s.replace(/(\.\d)0$/, "$1");
+    return n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 };
 
 export default function BetSlip({ selections, onRemove }) {
