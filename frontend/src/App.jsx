@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useEffect as UseEffect2 } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchMatches, submitBet } from "./api";
 import MatchCard from "./components/MatchCard";
 import BetSlip from "./components/BetSlip";
@@ -11,10 +11,12 @@ export default function App() {
     const [sending, setSending] = useState(false);
 
     useEffect(() => {
-        fetchMatches().then(setMatches).catch((e) => {
-            console.error(e);
-            setMatches([]);
-        });
+        fetchMatches()
+            .then(setMatches)
+            .catch((e) => {
+                console.error(e);
+                setMatches([]);
+            });
     }, []);
 
     // === MODE SOMME ===
@@ -27,8 +29,9 @@ export default function App() {
         [stake, totalOdd]
     );
 
+    // petit log pour confirmer le mode somme au runtime
     useEffect(() => {
-        console.log("MODE_SOMME ✅ totalOdd =", totalOdd, "odds=", selections.map(s => s.odd));
+        console.log("MODE_SOMME ✅ totalOdd =", totalOdd, "odds =", selections.map((s) => s.odd));
     }, [totalOdd, selections]);
 
     const togglePick = (match, pickKey) => {
@@ -43,6 +46,7 @@ export default function App() {
             pick: pickKey === "home" ? match.home : pickKey === "away" ? match.away : "Nul",
             odd,
         };
+
         if (existingIndex >= 0) {
             const prev = selections[existingIndex];
             if (prev.pick === newSel.pick) {
@@ -61,7 +65,7 @@ export default function App() {
         if (!bettorName || !stake || selections.length === 0) return;
         setSending(true);
         try {
-            const res = await submitBet({ bettorName, stake: Number(stake), selections });
+            await submitBet({ bettorName, stake: Number(stake), selections });
             // on affiche ce que calcule le FRONT (somme), pas la valeur retournée par le back
             alert(`Pari envoyé ! [MODE SOMME] Cote totale ${totalOdd.toFixed(2)} • Gain potentiel ${potentialWin}`);
             setSelections([]);
@@ -77,7 +81,21 @@ export default function App() {
 
     return (
         <div className="container">
-            <h1>🍻 Paris Sportifs — RP <span style={{ fontSize: 14, marginLeft: 8, padding: "2px 6px", borderRadius: 6, background: "#1e293b" }}>MODE SOMME ✅</span></h1>
+            <h1>
+                🍻 Paris Sportifs — RP{" "}
+                <span
+                    style={{
+                        fontSize: 14,
+                        marginLeft: 8,
+                        padding: "2px 6px",
+                        borderRadius: 6,
+                        background: "#1e293b",
+                    }}
+                >
+                    MODE SOMME ✅
+                </span>
+            </h1>
+
             <div className="grid">
                 <div>
                     {matches.length === 0 && (
@@ -92,9 +110,11 @@ export default function App() {
                         />
                     ))}
                 </div>
+
                 <div>
                     <div className="card">
                         <h3>🧾 Ticket</h3>
+
                         <div className="row" style={{ marginBottom: 8 }}>
                             <input
                                 className="input"
@@ -103,6 +123,7 @@ export default function App() {
                                 onChange={(e) => setBettorName(e.target.value)}
                             />
                         </div>
+
                         <div className="row" style={{ marginBottom: 8 }}>
                             <input
                                 className="input"
@@ -114,14 +135,21 @@ export default function App() {
                                 step="0.01"
                             />
                         </div>
+
                         <BetSlip
                             selections={selections}
                             onRemove={(id) => setSelections(selections.filter((s) => s.matchId !== id))}
                         />
+
                         <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
-                            <div className="small">Cote totale (somme): <b>{totalOdd.toFixed(2)}</b></div>
-                            <div className="small">Gain potentiel: <b>{potentialWin}</b></div>
+                            <div className="small">
+                                Cote totale (somme): <b>{totalOdd.toFixed(2)}</b>
+                            </div>
+                            <div className="small">
+                                Gain potentiel: <b>{potentialWin}</b>
+                            </div>
                         </div>
+
                         <div style={{ marginTop: 12 }}>
                             <button
                                 className="button"
@@ -132,8 +160,11 @@ export default function App() {
                             </button>
                         </div>
                     </div>
+
                     <div className="small">
-                        <p>Astuce: cliquez une 2ᵉ fois sur le même pari pour l'enlever du ticket.</p>
+                        <p>
+                            Astuce: cliquez une 2ᵉ fois sur le même pari pour l'enlever du ticket.
+                        </p>
                     </div>
                 </div>
             </div>
